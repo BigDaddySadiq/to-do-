@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sadiq's Daily Wins Streak</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0f0f1a;font-family:'Inter',system-ui,sans-serif;min-height:100vh}
+  input,select,textarea,button{font-family:inherit}
+  ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-track{background:#1a1a2e} ::-webkit-scrollbar-thumb{background:#2e2e42;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect,useRef}=React;
+
+// ── Storage (localStorage) ────────────────────────────────────────────────────
+const store={
+  get:async k=>{const v=localStorage.getItem(k);return v?{value:v}:null},
+  set:async(k,v)=>localStorage.setItem(k,v),
+};
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const COLS=["todo","doing","done"];
+const COL_LABELS={todo:"To Do",doing:"Doing ⚡",done:"Done ✓"};
+const COL_ACCENT={todo:"#6366f1",doing:"#f59e0b",done:"#22c55e"};
+const TAG_COLORS=["#6366f1","#ec4899","#f59e0b","#14b8a6","#3b82f6","#a855f7"];
+const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAY_NAMES=["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+const genId=()=>Math.random().toString(36).slice(2,9);
+const todayStr=()=>new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+const timeStr=d=>d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const dateKey=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+// ── Tag ───────────────────────────────────────────────────────────────────────
+function Tag({label,color}){
+  return <span style={{background:color+"22",color,border:`1px solid ${color}55`,borderRadius:4,fontSize:10,padding:"1px 6px",fontWeight:600}}>{label}</span>;
+}
+
+// ── Card ──────────────────────────────────────────────────────────────────────
+function Card({task,onMove,onDelete,onEdit,onDragStart,onDragEnd,isDragging}){
+  const[menu,setMenu]=useState(false);const ref=useRef();
+  useEffect(()=>{const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setMenu(false);};document.addEventListener("mousedown",fn);return()=>document.removeEventListener("mousedown",fn);},[]);
+  const mBtn={display:"block",width:"100%",textAlign:"left",padding:"8px 14px",background:"none",border:"none",cursor:"pointer",fontSize:13};
+  return(
+    <div draggable onDragStart={e=>{e.dataTransfer.effectAllowed="move";onDragStart(task.id);}} onDragEnd={onDragEnd}
+      style={{background:"#1e1e2e",border:`1px solid ${isDragging?"#6366f1":"#2e2e42"}`,borderRadius:10,padding:"12px 14px",marginBottom:8,
+        position:"relative",boxShadow:isDragging?"0 8px 32px #6366f155":"0 2px 8px #0004",opacity:isDragging?0.45:1,
+        transform:isDragging?"scale(0.97)":"scale(1)",transition:"all .15s",cursor:"grab",userSelect:"none"}}>
+      <div style={{position:"absolute",top:12,left:6,width:5,height:5,borderRadius:"50%",
+        background:task.priority==="high"?"#f87171":task.priority==="medium"?"#fbbf24":"#4ade80"}}/>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+        <p style={{color:"#e2e8f0",fontSize:14,margin:0,lineHeight:1.5,flex:1,
+          textDecoration:task.col==="done"?"line-through":"none",opacity:task.col==="done"?0.5:1}}>{task.text}</p>
+        <div ref={ref} style={{position:"relative"}}>
+          <button onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setMenu(m=>!m);}}
+            style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:16,padding:"0 2px"}}>⋯</button>
+          {menu&&(
+            <div style={{position:"absolute",right:0,top:20,background:"#252538",border:"1px solid #2e2e42",borderRadius:8,zIndex:10,minWidth:140,boxShadow:"0 8px 24px #0006"}}>
+              {COLS.filter(c=>c!==task.col).map(c=>(
+                <button key={c} onClick={()=>{onMove(task.id,c);setMenu(false);}} style={{...mBtn,color:"#cbd5e1"}}
+                  onMouseEnter={e=>e.target.style.background="#1e1e2e"} onMouseLeave={e=>e.target.style.background="none"}>→ {COL_LABELS[c]}</button>
+              ))}
+              <hr style={{border:"none",borderTop:"1px solid #2e2e42",margin:"2px 0"}}/>
+              <button onClick={()=>{onEdit(task);setMenu(false);}} style={{...mBtn,color:"#94a3b8"}}
+                onMouseEnter={e=>e.target.style.background="#1e1e2e"} onMouseLeave={e=>e.target.style.background="none"}>✎ Edit</button>
+              <button onClick={()=>{onDelete(task.id);setMenu(false);}} style={{...mBtn,color:"#f87171"}}
+                onMouseEnter={e=>e.target.style.background="#1e1e2e"} onMouseLeave={e=>e.target.style.background="none"}>✕ Delete</button>
+            </div>
+          )}
+        </div>
+      </div>
+      {task.tag&&<div style={{marginTop:8}}><Tag label={task.tag} color={TAG_COLORS[task.tagColor??0]}/></div>}
+    </div>
+  );
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function TaskModal({onClose,onSave,initial}){
+  const[text,setText]=useState(initial?.text??"");
+  const[priority,setPriority]=useState(initial?.priority??"medium");
+  const[tag,setTag]=useState(initial?.tag??"");
+  const[tagColor,setTagColor]=useState(initial?.tagColor??0);
+  const[col,setCol]=useState(initial?.col??"todo");
+  const save=()=>{if(!text.trim())return;onSave({text:text.trim(),priority,tag:tag.trim(),tagColor,col});onClose();};
+  const sel={width:"100%",background:"#252538",border:"1px solid #2e2e42",borderRadius:6,color:"#e2e8f0",padding:"7px 10px",fontSize:13};
+  return(
+    <div style={{position:"fixed",inset:0,background:"#000a",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#1a1a2e",border:"1px solid #2e2e42",borderRadius:14,padding:24,width:360,boxShadow:"0 20px 60px #0008"}}>
+        <h3 style={{color:"#e2e8f0",margin:"0 0 16px",fontSize:16}}>{initial?"Edit Task":"Add Task"}</h3>
+        <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="What needs to be done?"
+          style={{width:"100%",background:"#252538",border:"1px solid #2e2e42",borderRadius:8,color:"#e2e8f0",
+            padding:"10px 12px",fontSize:14,resize:"vertical",minHeight:70,outline:"none",boxSizing:"border-box"}}
+          autoFocus onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),save())}/>
+        <div style={{display:"flex",gap:8,marginTop:12}}>
+          <div style={{flex:1}}>
+            <label style={{color:"#64748b",fontSize:11,display:"block",marginBottom:4}}>COLUMN</label>
+            <select value={col} onChange={e=>setCol(e.target.value)} style={sel}>
+              {COLS.map(c=><option key={c} value={c}>{COL_LABELS[c]}</option>)}
+            </select>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{color:"#64748b",fontSize:11,display:"block",marginBottom:4}}>PRIORITY</label>
+            <select value={priority} onChange={e=>setPriority(e.target.value)} style={sel}>
+              <option value="high">🔴 High</option>
+              <option value="medium">🟡 Medium</option>
+              <option value="low">🟢 Low</option>
+            </select>
+          </div>
+        </div>
+        <div style={{marginTop:12}}>
+          <label style={{color:"#64748b",fontSize:11,display:"block",marginBottom:4}}>TAG (optional)</label>
+          <div style={{display:"flex",gap:8}}>
+            <input value={tag} onChange={e=>setTag(e.target.value)} placeholder="e.g. Client, Research…"
+              style={{flex:1,background:"#252538",border:"1px solid #2e2e42",borderRadius:6,color:"#e2e8f0",padding:"7px 10px",fontSize:13,outline:"none"}}/>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              {TAG_COLORS.map((c,i)=>(
+                <button key={i} onClick={()=>setTagColor(i)}
+                  style={{width:16,height:16,borderRadius:"50%",background:c,border:tagColor===i?"2px solid #fff":"2px solid transparent",cursor:"pointer",padding:0}}/>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{padding:"8px 18px",background:"none",border:"1px solid #2e2e42",borderRadius:8,color:"#94a3b8",cursor:"pointer",fontSize:13}}>Cancel</button>
+          <button onClick={save} style={{padding:"8px 18px",background:"#6366f1",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>{initial?"Save":"Add Task"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Completion Calendar ───────────────────────────────────────────────────────
+function CompletionCalendar({completedDays}){
+  const[nav,setNav]=useState(()=>{const n=new Date();return{year:n.getFullYear(),month:n.getMonth()};});
+  const today=new Date();const todayK=dateKey(today);
+  const firstDay=new Date(nav.year,nav.month,1).getDay();
+  const daysInMonth=new Date(nav.year,nav.month+1,0).getDate();
+  const streak=()=>{let s=0,d=new Date();while(true){const k=dateKey(d);if(completedDays[k]){s++;d.setDate(d.getDate()-1);}else break;}return s;};
+  const totalDone=Object.values(completedDays).filter(Boolean).length;
+  const cells=[];
+  for(let i=0;i<firstDay;i++)cells.push(null);
+  for(let d=1;d<=daysInMonth;d++)cells.push(d);
+  return(
+    <div style={{background:"#13131f",border:"1px solid #22c55e22",borderRadius:14,padding:"20px 24px",marginTop:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <div>
+          <h2 style={{color:"#e2e8f0",margin:0,fontSize:16,fontWeight:700}}>Completion Calendar</h2>
+          <p style={{color:"#475569",margin:"3px 0 0",fontSize:12}}>Days where all tasks were completed ✓</p>
+        </div>
+        <div style={{display:"flex",gap:16}}>
+          <div style={{textAlign:"center"}}><div style={{color:"#22c55e",fontWeight:800,fontSize:20}}>{streak()}</div><div style={{color:"#475569",fontSize:10}}>day streak</div></div>
+          <div style={{textAlign:"center"}}><div style={{color:"#6366f1",fontWeight:800,fontSize:20}}>{totalDone}</div><div style={{color:"#475569",fontSize:10}}>total days</div></div>
+        </div>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <button onClick={()=>setNav(n=>{const d=new Date(n.year,n.month-1);return{year:d.getFullYear(),month:d.getMonth()};})}
+          style={{background:"#1e1e2e",border:"1px solid #2e2e42",borderRadius:8,color:"#94a3b8",cursor:"pointer",padding:"5px 12px",fontSize:13}}>‹</button>
+        <span style={{color:"#e2e8f0",fontWeight:600,fontSize:14}}>{MONTH_NAMES[nav.month]} {nav.year}</span>
+        <button onClick={()=>setNav(n=>{const d=new Date(n.year,n.month+1);return{year:d.getFullYear(),month:d.getMonth()};})}
+          style={{background:"#1e1e2e",border:"1px solid #2e2e42",borderRadius:8,color:"#94a3b8",cursor:"pointer",padding:"5px 12px",fontSize:13}}>›</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:6}}>
+        {DAY_NAMES.map(d=><div key={d} style={{textAlign:"center",color:"#334155",fontSize:10,fontWeight:700}}>{d}</div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+        {cells.map((day,i)=>{
+          if(!day)return <div key={"e"+i}/>;
+          const k=`${nav.year}-${String(nav.month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+          const done=!!completedDays[k],isToday=k===todayK,isFuture=new Date(nav.year,nav.month,day)>today;
+          return(
+            <div key={k} style={{display:"flex",justifyContent:"center"}}>
+              <div style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                background:done?"linear-gradient(135deg,#22c55e,#16a34a)":isToday?"#1e2a1e":"transparent",
+                border:done?"2px solid #22c55e55":isToday?"2px solid #22c55e44":"2px solid #2e2e42",
+                boxShadow:done?"0 0 10px #22c55e44":"none",opacity:isFuture?0.3:1,transition:"all .3s"}}>
+                {done
+                  ?<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7L5.5 10L11.5 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  :<span style={{color:isToday?"#22c55e":"#334155",fontSize:11,fontWeight:isToday?700:400}}>{day}</span>
+                }
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{color:"#1e3a2a",textAlign:"center",fontSize:11,marginTop:16,marginBottom:0}}>Auto-ticks when every task is moved to Done ✓</p>
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+function App(){
+  const[tick,setTick]=useState(new Date());
+  const[tasks,setTasks]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[search,setSearch]=useState("");
+  const[draggingId,setDraggingId]=useState(null);
+  const[overCol,setOverCol]=useState(null);
+  const[completedDays,setCompletedDays]=useState({});
+
+  useEffect(()=>{const t=setInterval(()=>setTick(new Date()),1000);return()=>clearInterval(t);},[]);
+
+  useEffect(()=>{
+    (async()=>{
+      try{const r=await store.get("kanban-tasks");if(r?.value)setTasks(JSON.parse(r.value));}catch{}
+      try{const r=await store.get("completed-days");if(r?.value)setCompletedDays(JSON.parse(r.value));}catch{}
+      setLoading(false);
+    })();
+  },[]);
+
+  const saveTasks=async t=>{setTasks(t);try{await store.set("kanban-tasks",JSON.stringify(t));}catch{}};
+  const saveDays=async d=>{setCompletedDays(d);try{await store.set("completed-days",JSON.stringify(d));}catch{}};
+
+  useEffect(()=>{
+    if(tasks.length>0&&tasks.every(t=>t.col==="done")){
+      const k=dateKey();
+      if(!completedDays[k])saveDays({...completedDays,[k]:true});
+    }
+  },[tasks]);
+
+  const addTask=p=>saveTasks([...tasks,{id:genId(),...p,createdAt:Date.now()}]);
+  const editTask=(id,u)=>saveTasks(tasks.map(t=>t.id===id?{...t,...u}:t));
+  const moveTask=(id,c)=>saveTasks(tasks.map(t=>t.id===id?{...t,col:c}:t));
+  const deleteTask=id=>saveTasks(tasks.filter(t=>t.id!==id));
+  const clearDone=()=>saveTasks(tasks.filter(t=>t.col!=="done"));
+
+  const handleDragStart=id=>setDraggingId(id);
+  const handleDragEnd=()=>{setDraggingId(null);setOverCol(null);};
+  const handleDragOver=(e,c)=>{e.preventDefault();setOverCol(c);};
+  const handleDrop=(e,c)=>{e.preventDefault();if(draggingId)moveTask(draggingId,c);setDraggingId(null);setOverCol(null);};
+
+  const filtered=search.trim()?tasks.filter(t=>t.text.toLowerCase().includes(search.toLowerCase())||t.tag?.toLowerCase().includes(search.toLowerCase())):tasks;
+  const byCol=c=>filtered.filter(t=>t.col===c);
+  const doneCount=tasks.filter(t=>t.col==="done").length;
+  const pct=tasks.length?Math.round((doneCount/tasks.length)*100):0;
+  const allDone=tasks.length>0&&tasks.every(t=>t.col==="done");
+
+  if(loading)return<div style={{background:"#0f0f1a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b"}}>Loading…</div>;
+
+  return(
+    <div style={{background:"#0f0f1a",minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif",padding:"24px 20px"}}>
+      {(modal==="add"||(modal&&modal.id))&&(
+        <TaskModal initial={modal==="add"?null:modal} onClose={()=>setModal(null)} onSave={modal==="add"?addTask:u=>editTask(modal.id,u)}/>
+      )}
+      <div style={{maxWidth:1100,margin:"0 auto"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12,marginBottom:24}}>
+          <div>
+            <h1 style={{color:"#e2e8f0",margin:0,fontSize:22,fontWeight:700}}>Sadiq's Daily Wins Streak</h1>
+            <p style={{color:"#475569",margin:"4px 0 0",fontSize:13}}>
+              {todayStr()} &nbsp;·&nbsp;
+              <span style={{color:"#6366f1",fontVariantNumeric:"tabular-nums"}}>{timeStr(tick)}</span>
+            </p>
+          </div>
+          <button onClick={()=>setModal("add")} style={{background:"#6366f1",border:"none",borderRadius:10,color:"#fff",padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>+ Add Task</button>
+        </div>
+
+        {/* Progress */}
+        <div style={{background:"#1a1a2e",border:"1px solid #2e2e42",borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:16}}>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{color:"#94a3b8",fontSize:12}}>Today's Progress</span>
+              <span style={{color:allDone?"#22c55e":"#64748b",fontSize:13,fontWeight:700}}>{doneCount}/{tasks.length} done {allDone?"🎉":""}</span>
+            </div>
+            <div style={{background:"#252538",borderRadius:99,height:8}}>
+              <div style={{width:`${pct}%`,background:allDone?"linear-gradient(90deg,#22c55e,#16a34a)":"linear-gradient(90deg,#6366f1,#22c55e)",height:8,borderRadius:99,transition:"width .4s"}}/>
+            </div>
+          </div>
+          <span style={{color:allDone?"#22c55e":"#e2e8f0",fontWeight:800,fontSize:20,minWidth:44,textAlign:"right"}}>{pct}%</span>
+        </div>
+
+        {/* Search */}
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search tasks or tags…"
+          style={{width:"100%",background:"#1a1a2e",border:"1px solid #2e2e42",borderRadius:10,color:"#e2e8f0",padding:"10px 14px",fontSize:13,outline:"none",marginBottom:20,boxSizing:"border-box"}}/>
+
+        {/* Kanban */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
+          {COLS.map(col=>{
+            const isOver=overCol===col,accent=COL_ACCENT[col];
+            return(
+              <div key={col} onDragOver={e=>handleDragOver(e,col)} onDragLeave={()=>setOverCol(null)} onDrop={e=>handleDrop(e,col)}
+                style={{background:isOver?accent+"0e":"#13131f",border:`1px solid ${isOver?accent+"88":accent+"33"}`,
+                  borderRadius:12,padding:14,transition:"all .15s",boxShadow:isOver?`0 0 16px ${accent}22`:"none"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:accent}}/>
+                    <span style={{color:"#e2e8f0",fontWeight:700,fontSize:14}}>{COL_LABELS[col]}</span>
+                    <span style={{background:"#252538",color:"#64748b",fontSize:11,borderRadius:99,padding:"1px 8px",fontWeight:600}}>{byCol(col).length}</span>
+                  </div>
+                  {col==="done"&&doneCount>0&&<button onClick={clearDone} style={{background:"none",border:"none",color:"#475569",fontSize:11,cursor:"pointer",textDecoration:"underline"}}>Clear</button>}
+                </div>
+                <div style={{minHeight:60}}>
+                  {byCol(col).length===0
+                    ?<div style={{color:isOver?accent+"99":"#2e3554",fontSize:13,textAlign:"center",border:`1px dashed ${isOver?accent+"66":"#2e2e42"}`,borderRadius:8,padding:"24px 8px",transition:"all .15s"}}>
+                        {isOver?"Drop here":col==="todo"?"All clear 🎉":col==="doing"?"Nothing in progress":"Nothing done yet"}
+                      </div>
+                    :byCol(col).map(task=><Card key={task.id} task={task} onMove={moveTask} onDelete={deleteTask} onEdit={setModal} onDragStart={handleDragStart} onDragEnd={handleDragEnd} isDragging={draggingId===task.id}/>)
+                  }
+                  {isOver&&byCol(col).length>0&&draggingId&&<div style={{height:4,borderRadius:99,background:accent,margin:"4px 0",opacity:.7}}/>}
+                </div>
+                <button onClick={()=>setModal("add")}
+                  style={{marginTop:8,width:"100%",background:"none",border:"1px dashed #2e2e42",borderRadius:8,color:"#475569",padding:"8px",fontSize:13,cursor:"pointer",transition:"all .15s"}}
+                  onMouseEnter={e=>{e.target.style.borderColor=accent;e.target.style.color=accent;}}
+                  onMouseLeave={e=>{e.target.style.borderColor="#2e2e42";e.target.style.color="#475569";}}>+ Add task</button>
+              </div>
+            );
+          })}
+        </div>
+
+        <CompletionCalendar completedDays={completedDays}/>
+
+        <p style={{color:"#2e3554",textAlign:"center",fontSize:11,marginTop:20,paddingBottom:20}}>
+          Drag cards between columns · Click ⋯ to edit or delete · Everything auto-saves to your browser
+        </p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
